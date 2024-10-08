@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+"""
+Fetch variables from Gitlab and export them to a current shell.
+
+Usefull for debugging CI pipelines on host.
+
+Usage:
+export GL_URL=https://gitlab.company.com
+export GL_TOKEN="..."
+source <(./gl-fetch-vars path)
+"""
+
+import os
+import sys
+
+import gitlab
+import gitlab.v4.objects
+from gitlab.v4.objects import Group as glGroup
+from gitlab.v4.objects import Project as glProject
+
+url = os.environ["GL_URL"]
+token = os.environ["GL_TOKEN"]
+gl = gitlab.Gitlab(url, private_token=token)
+gl.auth()
+
+
+def msg(txt: str) -> None:
+    print(txt, file=sys.stderr)
+
+
+def prn_vars(obj: glGroup | glProject, path: str) -> None:
+    evars = obj.variables.list()
+    msg(f"load {len(evars)} variables from {path}")
+    for v in evars:
+        msg(f"  {v.key}")
+        print("export", '%s="%s"' % (v.key, v.value))
+
+
+def prn_vars_proj(obj: glProject) -> None:
+    prn_vars_group(gl.groups.get(obj.namespace["id"]))
+    prn_vars(obj, obj.path_with_namespace)
+
+
+def prn_vars_group(obj: glGroup) -> None:
+    if obj.parent_id:
+        prn_vars_group(gl.groups.get(obj.parent_id))
+    prn_vars(obj, obj.full_path)
+
+
+def main() -> None:
+    search = sys.argv[1]
+    msg(f"search for '{search}")
+    piter = gl.projects.list(search_namespaces=True, search=search)
+    proj_list = [p for p in piter if p.path_with_namespace.endswith(search)]
+    msg(f"found {len(proj_list)} project")
+    for p in proj_list:
+        msg(f"  {p.path_with_namespace}")
+    if not proj_list:
+        return
+
+    prn_vars_proj(proj_list[0])
+
+
+if __name__ == "__main__":
+    main()
