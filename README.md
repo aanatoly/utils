@@ -8,3 +8,4 @@ misc development utils
 
 small utils and oneliners
  - [prn-git-creds.sh](misc/prn-git-creds.sh) - print git creds for the repo
+ - [gl-fetch-vars](misc/prn-git-creds.sh) - fetch Gitlab CI vars
