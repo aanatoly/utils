@@ -69,7 +69,7 @@ CWARN=$(ansi_color fg-yellow bold)
 CERROR=$(ansi_color fg-red bold)
 
 msg() {
-    echo -e "$1$PROG: $2\e[0m" >/dev/stderr
+    echo -e "$1$PROG: $2\e[0m" >&2
 }
 
 abort() {

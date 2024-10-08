@@ -8,7 +8,8 @@ for offline venv creation.
 
 # cached venv
 After creating first venv using get-pip.py (takes 3-4 sec), script caches it and
-uses as template for later venvs. Creating new venv from template takes 1 sec or less.
+uses as template for later venvs. Creating new venv from template takes 1 sec
+or less.
 
 # cached wheels
 Before installing packages to venv, script builds wheels and caches them.
@@ -23,8 +24,9 @@ import logging
 import os
 import shutil
 import subprocess as sp
+import sys
 import urllib.request
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 PROG = "mk-venv"
 VERSION = "1.0.0"
@@ -34,6 +36,8 @@ log = logging.getLogger(__name__)
 
 # pyright: reportUnusedCallResult=false
 
+# disable warning for upercase names
+# ruff: noqa: N806 N803
 
 DEFAULT_PYTHON_VERSION = "3.11"
 
@@ -55,31 +59,31 @@ COFF = "\033[0m"
 
 # provide type hints to linter
 class ArgsTyped:
-    def __init__(self, kw: dict):  # pyright: ignore [reportUnknownParameterType, reportMissingTypeArgument]
+    def __init__(self, kw: dict[str, str]):
         self.get_pip_dir: str = kw["get_pip_dir"]
         self.wheels_dir: str = kw["wheels_dir"]
         self.mini_venv_dir: str = kw["mini_venv_dir"]
         self.venv_dir: str = kw["venv_dir"]
         self.cmd: str = kw["cmd"]
         self.py: str = kw["py"]
-        self.offline: bool = kw["offline"]
+        self.offline: bool = bool(kw["offline"])
 
 
-def info(msg: str):
-    log.info(f"{CON}{PROG}: {msg}{COFF}")
+def info(msg: str) -> None:
+    log.info(f"{CON}{PROG}: {msg}{COFF}")  # noqa: G004
 
 
-def block_offline(Args: ArgsTyped, msg: str):
-    if Args.offline:
+def block_offline(args: ArgsTyped, msg: str) -> None:
+    if args.offline:
         info(f"can't download {msg} in offline mode")
-        exit(1)
+        sys.exit(1)
 
 
 # NOTE: To check local availability we need to remove all '-f' params
 # from install args, since they may include url. All other access is
 # blocked by '--no-index'
 def rm_pip_links(args: list[str]) -> list[str]:
-    rc = []
+    rc: list[str] = []
     i = 0
     while i < len(args):
         if args[i] == "-f":
@@ -90,17 +94,27 @@ def rm_pip_links(args: list[str]) -> list[str]:
     return rc
 
 
-def venv_copy(src: str, dst: str):
+def venv_copy(src: str, dst: str) -> None:
     info(f"create venv '{dst}' from template '{src}'")
     src = os.path.realpath(src)
     dst = os.path.realpath(dst)
     if os.path.isdir(dst):
         shutil.rmtree(dst)
     os.makedirs(dst)
-    cmd = f"tar cf - --exclude __pycache__ -C {src} . | tar xf - -C {dst}"
-    log.debug("cmd %s", cmd)
-    sp.check_call(cmd, shell=True)
-    cmd = ["find", dst, f"{dst}/bin", "-maxdepth", "1", "-mindepth", "1", "-type", "f"]
+    sh = f"tar cf - --exclude __pycache__ -C {src} . | tar xf - -C {dst}"
+    log.debug("sh %s", sh)
+    sp.check_call(sh, shell=True)
+    cmd = [
+        "find",
+        dst,
+        f"{dst}/bin",
+        "-maxdepth",
+        "1",
+        "-mindepth",
+        "1",
+        "-type",
+        "f",
+    ]
     log.debug("cmd %s", cmd)
     txt = sp.check_output(cmd, universal_newlines=True).splitlines()
     e1 = f"s|{src}|{dst}|g"
@@ -110,7 +124,7 @@ def venv_copy(src: str, dst: str):
     sp.check_call(cmd)
 
 
-def venv_new(Args: ArgsTyped, InstallArgs: list[str]):
+def venv_new(Args: ArgsTyped, InstallArgs: list[str]) -> None:
     src = f"{Args.mini_venv_dir}"
     dst = f"{Args.venv_dir}"
     pip = f"{dst}/bin/pip"
@@ -131,14 +145,15 @@ def venv_new(Args: ArgsTyped, InstallArgs: list[str]):
     sp.check_call(cmd)
 
 
-def wheel_download(Args: ArgsTyped, InstallArgs: list[str]):
+def wheel_download(Args: ArgsTyped, InstallArgs: list[str]) -> None:
     if not InstallArgs:
         return
     info(f"search for '{InstallArgs}' in '{Args.wheels_dir}/'")
     # test if they are already downloaded
     pip = f"{Args.mini_venv_dir}/bin/pip"
     cmd_base = [pip, "wheel", "--no-cache-dir", "-w", f"{Args.wheels_dir}"]
-    cmd = cmd_base + [
+    cmd = [
+        *cmd_base,
         "--no-index",
         "-f",
         f"{Args.wheels_dir}",
@@ -154,18 +169,24 @@ def wheel_download(Args: ArgsTyped, InstallArgs: list[str]):
     block_offline(Args, "user wheels")
 
     info(f"download '{InstallArgs}' to '{Args.wheels_dir}/'")
-    cmd = cmd_base + [*InstallArgs]
+    cmd = [*cmd_base, *InstallArgs]
     log.debug("cmd %s", cmd)
     sp.check_call(cmd)
 
 
-def boot_ensure_mini_venv(Args: ArgsTyped):
+def boot_ensure_mini_venv(Args: ArgsTyped) -> None:
     path = f"{Args.mini_venv_dir}/bin/pip"
     if os.path.isfile(path):
         return
 
     info(f"create mini venv at '{Args.mini_venv_dir}'")
-    cmd = [f"python{Args.py}", "-m", "venv", "--without-pip", f"{Args.mini_venv_dir}"]
+    cmd = [
+        f"python{Args.py}",
+        "-m",
+        "venv",
+        "--without-pip",
+        f"{Args.mini_venv_dir}",
+    ]
     log.debug("cmd %s", cmd)
     sp.check_call(cmd)
 
@@ -186,7 +207,7 @@ def boot_ensure_mini_venv(Args: ArgsTyped):
     sp.check_call(cmd)
 
 
-def boot_ensure_get_pip(Args: ArgsTyped):
+def boot_ensure_get_pip(Args: ArgsTyped) -> None:
     path = f"{Args.get_pip_dir}/get-pip.py"
     if os.path.isfile(path):
         return
@@ -196,19 +217,19 @@ def boot_ensure_get_pip(Args: ArgsTyped):
     info(f"download {GET_PIP_URL} to '{path}'")
     os.makedirs(f"{Args.get_pip_dir}", exist_ok=True)
 
-    txt = bytes(urllib.request.urlopen(GET_PIP_URL).read())  # pyright: ignore [reportAny]
+    txt = bytes(urllib.request.urlopen(GET_PIP_URL).read())
     open(path, "wb").write(txt)
 
     wd = f"{Args.get_pip_dir}/wheels"
     os.makedirs(wd, exist_ok=True)
-    for k, v in SYSTEM_WHEELS.items():
+    for v in SYSTEM_WHEELS.values():
         wpath = f"{wd}/{v.split('/')[-1]}"
         info(f"download {v} to '{wpath}'")
-        txt = bytes(urllib.request.urlopen(v).read())  # pyright: ignore [reportAny]
+        txt = bytes(urllib.request.urlopen(v).read())
         open(wpath, "wb").write(txt)
 
 
-def get_args():
+def get_args() -> tuple[Namespace, list[str]]:
     p = ArgumentParser()
     p.add_argument(
         "--py",
@@ -257,23 +278,23 @@ def get_args():
     return Args, UnknownArgs
 
 
-def main():
+def main() -> None:
     Args, UnknownArgs = get_args()
     InstallArgs = UnknownArgs
     log.debug("Argsuments: %s", vars(Args))
     log.debug("Install Argsuments: %s", InstallArgs)
     # provide type hints for pyright
-    Args = ArgsTyped(vars(Args))
+    Argst = ArgsTyped(vars(Args))
     for attr in ["get_pip_dir", "mini_venv_dir", "venv_dir", "wheels_dir"]:
-        setattr(Args, attr, os.path.expanduser(getattr(Args, attr)))  # pyright: ignore [reportAny]
-    boot_ensure_get_pip(Args)
-    boot_ensure_mini_venv(Args)
+        setattr(Argst, attr, os.path.expanduser(getattr(Argst, attr)))
+    boot_ensure_get_pip(Argst)
+    boot_ensure_mini_venv(Argst)
 
-    if Args.cmd == "wheel":
-        wheel_download(Args, InstallArgs)
-    elif Args.cmd == "install":
-        wheel_download(Args, InstallArgs)
-        venv_new(Args, InstallArgs)
+    if Argst.cmd == "wheel":
+        wheel_download(Argst, InstallArgs)
+    elif Argst.cmd == "install":
+        wheel_download(Argst, InstallArgs)
+        venv_new(Argst, InstallArgs)
 
 
 if __name__ == "__main__":
