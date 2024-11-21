@@ -6,6 +6,7 @@
 PROG=$(basename "$0")
 VERSION="1.0"
 
+# shellcheck source=bash-lib/bash-lib.sh
 . bash-lib.sh
 
 ARGS=([FOO]="foo1" [BAR]="" [BAZ]="")

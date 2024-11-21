@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 # Bash Library
 # * ansi colors
 # * messages

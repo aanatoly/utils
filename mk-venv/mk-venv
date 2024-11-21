@@ -269,9 +269,7 @@ def get_args() -> tuple[Namespace, list[str]]:
         dest="cmd",
         metavar="cmd",
     )
-    p.add_argument(
-        "--offline", help="work offline, no internet access", action="store_true"
-    )
+    p.add_argument("--offline", help="work offline, no internet access", action="store_true")
     Args, UnknownArgs = p.parse_known_args()
     if UnknownArgs and UnknownArgs[0] == "--":
         del UnknownArgs[0]
